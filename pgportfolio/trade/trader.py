@@ -5,35 +5,21 @@ from pgportfolio.learn.rollingtrainer import RollingTrainer
 import logging
 import time
 
-
 class Trader:
-    def __init__(self, waiting_period, config, total_steps, net_dir, agent=None, initial_BTC=1.0, agent_type="nn"):
+    def __init__(self, waiting_period, config, total_steps, net_dir, agent=None, agent_type="nn", initial_BTC=1.0,):
         """
-        @:param agent_type: string, could be nn or traditional
+        @:param total_steps: int or None, if None then the trader will continue to loop indefinitely
         @:param agent: the traditional agent object, if the agent_type is traditional
+        @:param agent_type: string, could be nn or traditional
         """
         self._steps = 0
         self._total_steps = total_steps
         self._period = waiting_period
-        self._agent_type = agent_type
+        self._config = config
 
-        if agent_type == "traditional":
-            config["input"]["feature_number"] = 1
-            config["input"]["norm_method"] = "relative"
-            self._norm_method = "relative"
-        elif agent_type == "nn":
-            self._rolling_trainer = RollingTrainer(config, net_dir, agent=agent)
-            self._coin_name_list = self._rolling_trainer.coin_list
-            self._norm_method = config["input"]["norm_method"]
-            if not agent:
-                agent = self._rolling_trainer.agent
-        else:
-            raise ValueError()
-        self._agent = agent
-
-        # the total assets is calculated with BTC
+        # the total assets is calculated with BTCl
         self._total_capital = initial_BTC
-        self._window_size = config["input"]["window_size"]
+        self._window_size = int(config["input"]["window_size"])
         self._coin_number = config["input"]["coin_number"]
         self._commission_rate = config["trading"]["trading_consumption"]
         self._fake_ratio = config["input"]["fake_ratio"]
@@ -49,6 +35,25 @@ class Trader:
             # self._initialize_data_base()
         self._current_error_state = 'S000'
         self._current_error_info = ''
+        logging.debug('agent: %s, agent_type: %s' % (agent, agent_type))
+        if agent_type is not None:
+            self.setup_agent(config, net_dir, agent, agent_type)
+
+    def setup_agent(self, config, net_dir, agent, agent_type):
+        self._agent_type = agent_type
+        if agent_type == "traditional":
+            config["input"]["feature_number"] = 1
+            config["input"]["norm_method"] = "relative"
+            self._norm_method = "relative"
+        elif agent_type == "nn":
+            self._rolling_trainer = RollingTrainer(config, net_dir, agent=agent)
+            self._coin_name_list = self._rolling_trainer.coin_list
+            self._norm_method = config["input"]["norm_method"]
+            if not agent:
+                agent = self._rolling_trainer.agent
+        else:
+            raise ValueError()
+        self._agent = agent
 
     def _initialize_logging_data_frame(self, initial_BTC):
         logging_dict = {'Total Asset (BTC)': initial_BTC, 'BTC': 1}
@@ -88,7 +93,8 @@ class Trader:
     def __trade_body(self):
         self._current_error_state = 'S000'
         starttime = time.time()
-        omega = self._agent.decide_by_history(self.generate_history_matrix(),
+        history = self.generate_history_matrix()
+        omega = self._agent.decide_by_history(history,
                                               self._last_omega.copy())
         self.trade_by_strategy(omega)
         if self._agent_type == "nn":
@@ -110,14 +116,16 @@ class Trader:
                 wait = self._period - (current%self._period)
                 logging.info("sleep for %s seconds" % wait)
                 time.sleep(wait+2)
-
-                while self._steps < self._total_steps:
+                while self._total_steps is None or self._steps < self._total_steps:
                     sleeptime = self.__trade_body()
-                    time.sleep(sleeptime)
+                    if sleeptime > 0:
+                        time.sleep(sleeptime)
             else:
+                #BackTest should never have None self._total_steps
                 while self._steps < self._total_steps:
                     self.__trade_body()
         finally:
             if self._agent_type=="nn":
                 self._agent.recycle()
             self.finish_trading()
+        

@@ -8,7 +8,7 @@ import time
 from multiprocessing import Process
 from pgportfolio.learn.tradertrainer import TraderTrainer
 from pgportfolio.tools.configprocess import load_config
-
+from sys import exc_info
 
 def train_one(save_path, config, log_file_dir, index, logfile_level, console_level, device):
     """
@@ -29,9 +29,12 @@ def train_one(save_path, config, log_file_dir, index, logfile_level, console_lev
         console = logging.StreamHandler()
         console.setLevel(console_level)
         logging.getLogger().addHandler(console)
-    print("training at %s started" % index)
-    return TraderTrainer(config, save_path=save_path, device=device).train_net(log_file_dir=log_file_dir, index=index)
-
+    print("training at %s started. See %s for log." % (index, log_file_dir.replace("tensorboard", "programlog")))
+    try:
+        return TraderTrainer(config, save_path=save_path, device=device).train_net(log_file_dir=log_file_dir, index=index)
+    except Exception:
+        logging.error("TraderTrainer failed with args:\n config=%s\nsave_path=%s\ndevice=%s\nCheck log_file_dir=%s for more info on index %s\n%s" % (config, save_path, device, log_file_dir, index, exc_info()))
+        raise
 def train_all(processes=1, device="cpu"):
     """
     train all the agents in the train_package folders

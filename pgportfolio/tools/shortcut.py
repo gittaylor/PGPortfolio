@@ -1,7 +1,7 @@
 from __future__ import division,absolute_import,print_function
-from pgportfolio.trade.backtest import BackTest
 from pgportfolio.tdagent.algorithms import crp, ons, olmar, up, anticor1, pamr,\
     best, bk, cwmr_std, eg, sp, ubah, wmamr, bcrp, cornk, m0, rmr
+from pgportfolio.test import state
 
 # the dictionary of name of algorithms mapping to the constructor of tdagents
 ALGOS = {"crp": crp.CRP, "ons": ons.ONS, "olmar": olmar.OLMAR, "up": up.UP,
@@ -11,14 +11,14 @@ ALGOS = {"crp": crp.CRP, "ons": ons.ONS, "olmar": olmar.OLMAR, "up": up.UP,
          "cwmr": cwmr_std.CWMR_STD, "eg": eg.EG, "sp": sp.SP, "ubah": ubah.UBAH,
          "wmamr": wmamr.WMAMR}
 
-def execute_backtest(algo, config):
+def execute_backtest(algo, config, backtest_class):
     """
     @:param algo: string representing the name the name of algorithms
     @:return: numpy array of portfolio changes
     """
     agent, agent_type, net_dir = _construct_agent(algo)
-    backtester = BackTest(config, agent=agent, agent_type=agent_type, net_dir=net_dir)
-    backtester.start_trading()
+    backtester = backtest_class(config, agent=agent, agent_type=agent_type, net_dir=net_dir)
+    state.pdb_try_again(state.start_trading, backtester)
     return backtester.test_pc_vector
 
 

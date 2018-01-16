@@ -38,20 +38,20 @@ class DataMatrices:
         # assert window_size >= MIN_NUM_PERIOD
         self.__coin_no = coin_filter
         type_list = get_type_list(feature_number)
-        self.__features = type_list
+        self._features = type_list
         self.feature_number = feature_number
         volume_forward = get_volume_forward(self.__end-start, test_portion, portion_reversed)
-        self.__history_manager = gdm.HistoryManager(coin_number=coin_filter, end=self.__end,
+        self._history_manager = gdm.HistoryManager(coin_number=coin_filter, end=self.__end,
                                                     volume_average_days=volume_average_days,
                                                     volume_forward=volume_forward, online=online)
         if market == "poloniex":
-            self.__global_data = self.__history_manager.get_global_panel(start,
+            self.__global_data = self._history_manager.get_global_panel(start,
                                                                          self.__end,
                                                                          period=period,
                                                                          features=type_list)
         else:
             raise ValueError("market {} is not valid".format(market))
-        self.__period_length = period
+        self._period_length = self.__period_length = period
         # portfolio vector memory, [time, assets]
         self.__PVM = pd.DataFrame(index=self.__global_data.minor_axis,
                                   columns=self.__global_data.major_axis)
@@ -59,13 +59,15 @@ class DataMatrices:
 
         self._window_size = window_size
         self._num_periods = len(self.__global_data.minor_axis)
-        self.__divide_data(test_portion, portion_reversed)
 
         self._portion_reversed = portion_reversed
         self.__is_permed = is_permed
 
         self.__batch_size = batch_size
         self.__delta = 0  # the count of global increased
+
+        self.__divide_data(test_portion, portion_reversed)
+        # _train_ind created by _divide_data
         end_index = self._train_ind[-1]
         self.__replay_buffer = rb.ReplayBuffer(start_index=self._train_ind[0],
                                                end_index=end_index,
@@ -92,8 +94,20 @@ class DataMatrices:
         config = config.copy()
         input_config = config["input"]
         train_config = config["training"]
-        start = parse_time(input_config["start_date"])
-        end = parse_time(input_config["end_date"])
+        if "start" in input_config:
+            if not("start_date" in input_config):
+                start = input_config["start"]
+            else:
+                raise ValueError("both 'start' and 'start_date' in 'input' config. please remove one")
+        else:
+            start = parse_time(input_config["start_date"])
+        if "end" in input_config:
+            if not("end_date" in input_config):
+                end = input_config["end"]
+            else:
+                raise ValueError("both 'end' and 'end_date' in 'input' config. please remove one")
+        else:
+            end = parse_time(input_config["end_date"])
         return DataMatrices(start=start,
                             end=end,
                             market=input_config["market"],
@@ -116,7 +130,7 @@ class DataMatrices:
 
     @property
     def coin_list(self):
-        return self.__history_manager.coins
+        return self._history_manager.coins
 
     @property
     def num_train_samples(self):

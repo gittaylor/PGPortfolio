@@ -91,7 +91,10 @@ def byteify(input):
 
 
 def parse_time(time_string):
-    return time.mktime(datetime.strptime(time_string, "%Y/%m/%d").timetuple())
+    try: 
+        return time.mktime(datetime.strptime(time_string, "%Y/%m/%d").timetuple())
+    except ValueError:
+        return time.mktime(datetime.strptime(time_string, "%Y/%m/%d %H:%M:%S").timetuple())
 
 
 def load_config(index=None):

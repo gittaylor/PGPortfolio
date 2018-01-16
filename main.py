@@ -41,6 +41,73 @@ def build_parser():
                         help="folder(int) to load the config, neglect this option if loading from ./pgportfolio/net_config")
     return parser
 
+def train(options):
+    import pgportfolio.autotrain.training
+    if not options.algo:
+        pgportfolio.autotrain.training.train_all(int(options.processes), options.device)
+    else:
+        for folder in options.folder:
+            raise NotImplementedError()
+
+def generate(options):
+    import pgportfolio.autotrain.generate as generate
+    logging.basicConfig(level=logging.INFO)
+    generate.add_packages(load_config(), int(options.repeat))
+
+def download_data(options):
+    from pgportfolio.marketdata.datamatrices import DataMatrices
+    with open("./pgportfolio/net_config.json") as file:
+        config = json.load(file)
+    config = preprocess_config(config)
+    start = time.mktime(datetime.strptime(config["input"]["start_date"], "%Y/%m/%d").timetuple())
+    end = time.mktime(datetime.strptime(config["input"]["end_date"], "%Y/%m/%d").timetuple())
+    DataMatrices(start=start,
+                 end=end,
+                 feature_number=config["input"]["feature_number"],
+                 window_size=config["input"]["window_size"],
+                 online=True,
+                 period=config["input"]["global_period"],
+                 volume_average_days=config["input"]["volume_average_days"],
+                 coin_filter=config["input"]["coin_number"],
+                 is_permed=config["input"]["is_permed"],
+                 test_portion=config["input"]["test_portion"],
+                 portion_reversed=config["input"]["portion_reversed"])
+
+def backtest(options):
+    from pgportfolio.trade.backtest import BackTest
+    config = _config_by_algo(options.algo)
+    _set_logging_by_algo(logging.DEBUG, logging.DEBUG, options.algo, "backtestlog")
+    execute_backtest(options.algo, config, BackTest)
+
+def ccxt(options):
+    from pgportfolio.trade.ccxt import CCXTtrader
+    config = _config_by_algo(options.algo)
+    config = _config_by_algo(options.algo)
+    _set_logging_by_algo(logging.DEBUG, logging.DEBUG, options.algo, "backtestlog")
+    execute_backtest(options.algo, config, CCXTtrader)
+
+def save_test_data(options):
+    # This is used to export the test data
+    save_test_data(load_config(options.folder))
+
+def plot_graph(options):
+    logging.basicConfig(level=logging.INFO)
+    algos = options.algos.split(",")
+    if options.labels:
+        labels = options.labels.replace("_"," ")
+        labels = labels.split(",")
+    else:
+        labels = algos
+    plot.plot_backtest(load_config(), algos, labels)
+
+def plot_table(options):
+    algos = options.algos.split(",")
+    if options.labels:
+        labels = options.labels.replace("_"," ")
+        labels = labels.split(",")
+    else:
+        labels = algos
+    plot.table_backtest(load_config(), algos, labels, format=options.format)
 
 def main():
     parser = build_parser()
@@ -51,59 +118,28 @@ def main():
         os.makedirs("./" + "database")
 
     if options.mode == "train":
-        import pgportfolio.autotrain.training
-        if not options.algo:
-            pgportfolio.autotrain.training.train_all(int(options.processes), options.device)
-        else:
-            for folder in options.train_floder:
-                raise NotImplementedError()
+        train(options)
     elif options.mode == "generate":
-        import pgportfolio.autotrain.generate as generate
-        logging.basicConfig(level=logging.INFO)
-        generate.add_packages(load_config(), int(options.repeat))
+        generate(options)
     elif options.mode == "download_data":
-        from pgportfolio.marketdata.datamatrices import DataMatrices
-        with open("./pgportfolio/net_config.json") as file:
-            config = json.load(file)
-        config = preprocess_config(config)
-        start = time.mktime(datetime.strptime(config["input"]["start_date"], "%Y/%m/%d").timetuple())
-        end = time.mktime(datetime.strptime(config["input"]["end_date"], "%Y/%m/%d").timetuple())
-        DataMatrices(start=start,
-                     end=end,
-                     feature_number=config["input"]["feature_number"],
-                     window_size=config["input"]["window_size"],
-                     online=True,
-                     period=config["input"]["global_period"],
-                     volume_average_days=config["input"]["volume_average_days"],
-                     coin_filter=config["input"]["coin_number"],
-                     is_permed=config["input"]["is_permed"],
-                     test_portion=config["input"]["test_portion"],
-                     portion_reversed=config["input"]["portion_reversed"])
+        download_data(options)
     elif options.mode == "backtest":
-        config = _config_by_algo(options.algo)
-        _set_logging_by_algo(logging.DEBUG, logging.DEBUG, options.algo, "backtestlog")
-        execute_backtest(options.algo, config)
+        backtest(options)
+    elif options.mode == "ccxt":
+        ccxt(options)
     elif options.mode == "save_test_data":
-        # This is used to export the test data
-        save_test_data(load_config(options.folder))
+        save_test_data(options)
     elif options.mode == "plot":
-        logging.basicConfig(level=logging.INFO)
-        algos = options.algos.split(",")
-        if options.labels:
-            labels = options.labels.replace("_"," ")
-            labels = labels.split(",")
-        else:
-            labels = algos
-        plot.plot_backtest(load_config(), algos, labels)
+        plot_graph(options)
     elif options.mode == "table":
-        algos = options.algos.split(",")
-        if options.labels:
-            labels = options.labels.replace("_"," ")
-            labels = labels.split(",")
-        else:
-            labels = algos
-        plot.table_backtest(load_config(), algos, labels, format=options.format)
-
+        plot_table(options)
+    elif options.mode == "dgttp":
+        download_data(options)        
+        generate(options)
+        train(options)
+        backtest(options)
+        plot_graph(options)
+        
 def _set_logging_by_algo(console_level, file_level, algo, name):
     if algo.isdigit():
             logging.basicConfig(filename="./train_package/"+algo+"/"+name,
