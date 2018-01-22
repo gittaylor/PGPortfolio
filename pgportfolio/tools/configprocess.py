@@ -4,8 +4,9 @@ import time
 from datetime import datetime
 import json
 import os
-rootpath = os.path.dirname(os.path.abspath(__file__)).\
-    replace("\\pgportfolio\\tools", "").replace("/pgportfolio/tools","")
+
+# two directories above the current directory
+rootpath = os.path.split(os.path.split(os.path.dirname(os.path.abspath(__file__)))[0])[0]
 
 try:
     unicode        # Python 2
@@ -110,6 +111,15 @@ def load_config(index=None):
             config = json.load(file)
     return preprocess_config(config)
 
+def load_default_config():
+    """
+    load the default configuration net_config.json
+    """
+    filename = os.path.join(rootpath,"pgportfolio", "net_config.json")
+    with open(filename) as file:
+        config = json.load(file)
+    print("returning %s contents %s" % (filename, config))
+    return preprocess_config(config)    
 
 def check_input_same(config1, config2):
     input1 = config1["input"]
@@ -123,3 +133,37 @@ def check_input_same(config1, config2):
     else:
         return True
 
+def find_var_differences(config_variables, default_config):
+    differences = []
+    def find_differences(obj, path):
+        if type(obj) == dict:
+            for key in obj.keys():
+                combined_key = _construct_path(path, key)
+                find_differences(obj[key], combined_key)
+        else:
+            if not(_get_path(default_config, path) == obj):
+                if type(obj) == list:
+                    differences.append([path, obj])
+                else:
+                    raise ValueError("difference from default_config detected at %s, but type %s not supported" % (path, type(obj)))
+    find_differences(config_variables, '')
+    return differences
+                             
+def _construct_path(path, key):
+    if len(path) == 0:
+        return key
+    return '{}|{}'.format(path, key)
+                             
+def _get_path(config, combined_key):
+    keys = combined_key.split('|')
+    obj = config
+    for key in keys:
+        obj = obj[key]
+    return obj
+
+def _set_path(config, combined_key, value):
+    keys = combined_key.split('|')
+    obj = config
+    for key in keys[:-1]:
+        obj = obj[key]
+    obj[keys[-1]] = value
